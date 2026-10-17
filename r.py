@@ -1,5 +1,5 @@
 # ============================================================
-#  🎬 Netflix Checker (Final Fixed - Railway Ready)
+#  🎬 Netflix Checker (Final Fixed - Concurrent & Admin Panel)
 #  Bot: @Leon_netflixbot | Admin: 8626080388
 # ============================================================
 
@@ -237,7 +237,7 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔴 Bot is currently OFF by Admin.")
         return
 
-    # 🔥 FIX: Check Force Join Setting
+    # Check Force Join Setting
     if uid != ADMIN_ID and get_setting("fsub_active", "1") == "1":
         joined = await check_join(context.bot, uid)
         if not joined:
@@ -340,7 +340,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if get_setting("bot_active") == "0" and uid != ADMIN_ID: return
 
-    # 🔥 FIX: Check Force Join Setting
+    # Check Force Join Setting
     if uid != ADMIN_ID and get_setting("fsub_active", "1") == "1":
         joined = await check_join(context.bot, uid)
         if not joined:
@@ -388,7 +388,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         valid_count = 0
         completed = 0
         
-        # 🔥 FIX: Asynchronous Batch Processing lagaya hai (No blocking!)
+        # Asynchronous Batch Processing
         batch_size = 10 
         
         for i in range(0, len(blocks), batch_size):
@@ -448,7 +448,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status.edit_text(f"✅ {b('Sent')}: {sent} | ❌ {b('Failed')}: {failed}", parse_mode=ParseMode.HTML)
         return
 
-    # 🔥 FIX: Check Force Join Setting
+    # Check Force Join Setting
     if uid != ADMIN_ID and get_setting("fsub_active", "1") == "1":
         joined = await check_join(context.bot, uid)
         if not joined:
@@ -470,14 +470,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status.edit_text(res, parse_mode=ParseMode.HTML)
 
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+    # 🔥 concurrent_updates(True) ADDED HERE! 
+    app = Application.builder().token(BOT_TOKEN).concurrent_updates(True).build()
+    
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("admin", admin_cmd))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("👑 Bot Started")
+    print("👑 Bot Started (Concurrent Mode ON)")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
