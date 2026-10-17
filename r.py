@@ -258,8 +258,10 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Access Denied.")
+        return
+        
     is_on = get_setting("bot_active") == "1"
     is_verify = get_setting("channel_verify") == "1"
     
@@ -463,18 +465,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await status.edit_text(res, parse_mode=ParseMode.HTML)
 
-# ================== MAIN ==================
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Commands
     app.add_handler(CommandHandler("start", start_cmd))
-    app.add_handler(CommandHandler("admin", admin_cmd)) # 🔥 YE LINE MISSING THI
+    app.add_handler(CommandHandler("admin", admin_cmd))
     
-    # Callbacks
     app.add_handler(CallbackQueryHandler(callback_handler))
-    
-    # Documents & Messages
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
