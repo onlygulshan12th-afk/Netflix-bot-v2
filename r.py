@@ -1,12 +1,12 @@
 # ============================================================
-#  🎬 Netflix Checker (Final Fixed - Railway Ready)
+#  🎬 Netflix Checker (Final + Channel Toggle)
 #  Bot: @Leon_netflixbot | Admin: 8626080388
 # ============================================================
 
 import re, html, json, requests, asyncio, logging, urllib.parse, sqlite3, time, zipfile, io
 from concurrent.futures import ThreadPoolExecutor
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ParseMode, ChatType
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 # ================== CONFIG ==================
@@ -190,12 +190,13 @@ def check_account(cookie_text):
 
 # ================== FORCE JOIN & FORMATTER ==================
 async def check_join(bot, uid):
+    if get_setting("channel_verify", "0") == "0": return True # Agar off hai to direct pass
+    if uid == ADMIN_ID: return True
     try:
         m = await bot.get_chat_member(CHANNEL_USERNAME, uid)
         if m.status not in ("member", "administrator", "creator"):
             return False
-    except:
-        return False
+    except: return False
     return True
 
 def force_join_kb():
@@ -237,15 +238,14 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔴 Bot is currently OFF by Admin.")
         return
 
-    if uid != ADMIN_ID:
-        joined = await check_join(context.bot, uid)
-        if not joined:
-            await update.message.reply_text(
-                f"🔒 <b>{b('JOIN REQUIRED')}</b>\n\n"
-                f"{b('Please join our channel to use this bot')}.",
-                parse_mode=ParseMode.HTML, reply_markup=force_join_kb()
-            )
-            return
+    joined = await check_join(context.bot, uid)
+    if not joined:
+        await update.message.reply_text(
+            f"🔒 <b>{b('JOIN REQUIRED')}</b>\n\n"
+            f"{b('Please join our channel to use this bot')}.",
+            parse_mode=ParseMode.HTML, reply_markup=force_join_kb()
+        )
+        return
 
     await update.message.reply_text(
         f"🎬 <b>{b('NETFLIX PURE CHECKER')}</b>\n\n"
@@ -261,11 +261,16 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     
     is_on = get_setting("bot_active") == "1"
+    is_verify = get_setting("channel_verify") == "1"
+    
     await update.message.reply_text(
-        f"👑 <b>{b('ADMIN PANEL')}</b>\n\nBot Status: {'🟢 ON' if is_on else '🔴 OFF'}",
+        f"👑 <b>{b('ADMIN PANEL')}</b>\n\n"
+        f"Bot Status: {'🟢 ON' if is_on else '🔴 OFF'}\n"
+        f"Channel Verify: {'🟢 ON' if is_verify else '🔴 OFF'}",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"Toggle Bot ({'OFF' if is_on else 'ON'})", callback_data="admin_toggle", style="danger" if is_on else "success")],
+            [InlineKeyboardButton(f"Bot: {'OFF' if is_on else 'ON'}", callback_data="admin_toggle", style="danger" if is_on else "success")],
+            [InlineKeyboardButton(f"Channel Verify: {'OFF' if is_verify else 'ON'}", callback_data="admin_verify_toggle", style="danger" if is_verify else "success")],
             [InlineKeyboardButton("📢 " + b("Broadcast"), callback_data="admin_broadcast", style="primary")]
         ])
     )
@@ -274,7 +279,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     d = q.data
     
-    # 🔥 FIX: I Joined Button
     if d == "check_join_btn":
         joined = await check_join(context.bot, q.from_user.id)
         if joined:
@@ -288,7 +292,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ])
             )
         else:
-            await q.answer("You haven't joined yet! Please join first.", show_alert=True)
+            await q.answer("You haven't joined yet!", show_alert=True)
             
     elif d == "how_to":
         await q.edit_message_text(
@@ -305,12 +309,29 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if d == "admin_toggle":
             new_state = "0" if get_setting("bot_active") == "1" else "1"
             set_setting("bot_active", new_state)
+            is_on = new_state == "1"
+            is_verify = get_setting("channel_verify") == "1"
             await q.edit_message_reply_markup(
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"Toggle Bot ({'OFF' if new_state=='1' else 'ON'})", callback_data="admin_toggle", style="danger" if new_state=="1" else "success")],
+                    [InlineKeyboardButton(f"Bot: {'OFF' if is_on else 'ON'}", callback_data="admin_toggle", style="danger" if is_on else "success")],
+                    [InlineKeyboardButton(f"Channel Verify: {'OFF' if is_verify else 'ON'}", callback_data="admin_verify_toggle", style="danger" if is_verify else "success")],
                     [InlineKeyboardButton("📢 " + b("Broadcast"), callback_data="admin_broadcast", style="primary")]
                 ])
             )
+            
+        elif d == "admin_verify_toggle":
+            new_state = "0" if get_setting("channel_verify") == "1" else "1"
+            set_setting("channel_verify", new_state)
+            is_on = get_setting("bot_active") == "1"
+            is_verify = new_state == "1"
+            await q.edit_message_reply_markup(
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(f"Bot: {'OFF' if is_on else 'ON'}", callback_data="admin_toggle", style="danger" if is_on else "success")],
+                    [InlineKeyboardButton(f"Channel Verify: {'OFF' if is_verify else 'ON'}", callback_data="admin_verify_toggle", style="danger" if is_verify else "success")],
+                    [InlineKeyboardButton("📢 " + b("Broadcast"), callback_data="admin_broadcast", style="primary")]
+                ])
+            )
+            
         elif d == "admin_broadcast":
             context.user_data["awaiting_broadcast"] = True
             await q.edit_message_text(f"📢 {b('Send the message you want to broadcast:')}", parse_mode=ParseMode.HTML)
@@ -322,11 +343,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if get_setting("bot_active") == "0" and uid != ADMIN_ID: return
 
-    if uid != ADMIN_ID:
-        joined = await check_join(context.bot, uid)
-        if not joined:
-            await msg.reply_text(f"🔒 {b('Join channel first!')}", reply_markup=force_join_kb(), parse_mode=ParseMode.HTML)
-            return
+    joined = await check_join(context.bot, uid)
+    if not joined:
+        await msg.reply_text(f"🔒 {b('Join channel first!')}", reply_markup=force_join_kb(), parse_mode=ParseMode.HTML)
+        return
 
     if not msg.document: return
     
@@ -352,7 +372,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         blocks = [blk.strip() for blk in blocks if blk.strip()]
         
-        # 🔥 LIMIT LOGIC
         total_found = len(blocks)
         if total_found > 300:
             blocks = blocks[:300]
@@ -405,7 +424,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if get_setting("bot_active") == "0" and uid != ADMIN_ID: return
 
-    # 🔥 BROADCAST LOGIC (No "Broadcast" text)
     if uid == ADMIN_ID and context.user_data.get("awaiting_broadcast"):
         context.user_data["awaiting_broadcast"] = False
         status = await msg.reply_text(f"📢 {b('Broadcasting...')}", parse_mode=ParseMode.HTML)
@@ -418,7 +436,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sent, failed = 0, 0
         for target_id in users:
             try:
-                # Direct message, no "Broadcast" text
                 await context.bot.send_message(target_id, text, parse_mode=ParseMode.HTML)
                 sent += 1
             except: failed += 1
@@ -427,11 +444,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status.edit_text(f"✅ {b('Sent')}: {sent} | ❌ {b('Failed')}: {failed}", parse_mode=ParseMode.HTML)
         return
 
-    if uid != ADMIN_ID:
-        joined = await check_join(context.bot, uid)
-        if not joined:
-            await msg.reply_text(f"🔒 {b('Join channel first!')}", reply_markup=force_join_kb(), parse_mode=ParseMode.HTML)
-            return
+    joined = await check_join(context.bot, uid)
+    if not joined:
+        await msg.reply_text(f"🔒 {b('Join channel first!')}", reply_markup=force_join_kb(), parse_mode=ParseMode.HTML)
+        return
     
     text = msg.text.strip()
     if text.startswith("/") or len(text) < 20: return
