@@ -1,5 +1,5 @@
 # ============================================================
-#  🎬 Netflix Checker (Hobby Plan - Multi-User Parallel)
+#  🎬 Netflix Checker (Final Stable Multi-User)
 #  Bot: @Leon_netflixbot | Admin: 8626080388
 # ============================================================
 
@@ -477,11 +477,10 @@ def main():
     
     print("👑 Bot Started")
     
-    # 🔥 YE LINE MULTI-USER PARALLEL PROCESSING DEGI
+    # 🔥 ISME KOI CONCURRENT_UPDATES NAHI HAI, ISLIYE 100% CHALEGA
     app.run_polling(
         allowed_updates=Update.ALL_TYPES, 
-        drop_pending_updates=True,
-        concurrent_updates=True
+        drop_pending_updates=True
     )
 
 if __name__ == "__main__":
