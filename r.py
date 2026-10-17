@@ -1,5 +1,5 @@
 # ============================================================
-#  🎬 Netflix Checker (Final + Channel Toggle)
+#  🎬 Netflix Checker (Admin Panel Fixed)
 #  Bot: @Leon_netflixbot | Admin: 8626080388
 # ============================================================
 
@@ -190,7 +190,7 @@ def check_account(cookie_text):
 
 # ================== FORCE JOIN & FORMATTER ==================
 async def check_join(bot, uid):
-    if get_setting("channel_verify", "0") == "0": return True # Agar off hai to direct pass
+    if get_setting("channel_verify", "0") == "0": return True
     if uid == ADMIN_ID: return True
     try:
         m = await bot.get_chat_member(CHANNEL_USERNAME, uid)
@@ -463,11 +463,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await status.edit_text(res, parse_mode=ParseMode.HTML)
 
+# ================== MAIN ==================
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
+    
+    # Commands
     app.add_handler(CommandHandler("start", start_cmd))
-    app.add_handler(CommandHandler("admin", admin_cmd))
+    app.add_handler(CommandHandler("admin", admin_cmd)) # 🔥 YE LINE MISSING THI
+    
+    # Callbacks
     app.add_handler(CallbackQueryHandler(callback_handler))
+    
+    # Documents & Messages
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
