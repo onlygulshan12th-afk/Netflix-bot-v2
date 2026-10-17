@@ -1,5 +1,5 @@
 # ============================================================
-#  🎬 Netflix Checker (Multi-User Parallel Updates)
+#  🎬 Netflix Checker (Railway Fixed)
 #  Bot: @Leon_netflixbot | Admin: 8626080388
 # ============================================================
 
@@ -475,13 +475,8 @@ def main():
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("👑 Bot Started with Multi-User Support")
-    # 🔥 YE HAI WO LINE JO MULTI-DEVICE SUPPORT DEGI
-    app.run_polling(
-        allowed_updates=Update.ALL_TYPES, 
-        drop_pending_updates=True, 
-        concurrent_updates=True
-    )
+    print("👑 Bot Started")
+    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
