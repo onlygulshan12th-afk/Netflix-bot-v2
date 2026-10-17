@@ -237,7 +237,8 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔴 Bot is currently OFF by Admin.")
         return
 
-    if uid != ADMIN_ID:
+    # 🔥 FIX: Check Force Join Setting
+    if uid != ADMIN_ID and get_setting("fsub_active", "1") == "1":
         joined = await check_join(context.bot, uid)
         if not joined:
             await update.message.reply_text(
@@ -261,11 +262,16 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     
     is_on = get_setting("bot_active") == "1"
+    fsub_on = get_setting("fsub_active", "1") == "1"
+    
     await update.message.reply_text(
-        f"👑 <b>{b('ADMIN PANEL')}</b>\n\nBot Status: {'🟢 ON' if is_on else '🔴 OFF'}",
+        f"👑 <b>{b('ADMIN PANEL')}</b>\n\n"
+        f"Bot Status: {'🟢 ON' if is_on else '🔴 OFF'}\n"
+        f"Force Join: {'🟢 ON' if fsub_on else '🔴 OFF'}",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton(f"Toggle Bot ({'OFF' if is_on else 'ON'})", callback_data="admin_toggle", style="danger" if is_on else "success")],
+            [InlineKeyboardButton(f"Toggle Force Join ({'OFF' if fsub_on else 'ON'})", callback_data="admin_fsub_toggle", style="danger" if fsub_on else "success")],
             [InlineKeyboardButton("📢 " + b("Broadcast"), callback_data="admin_broadcast", style="primary")]
         ])
     )
@@ -301,12 +307,25 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif d.startswith("admin_"):
         if q.from_user.id != ADMIN_ID: return
         
-        if d == "admin_toggle":
-            new_state = "0" if get_setting("bot_active") == "1" else "1"
-            set_setting("bot_active", new_state)
-            await q.edit_message_reply_markup(
+        if d in ("admin_toggle", "admin_fsub_toggle"):
+            if d == "admin_toggle":
+                new_state = "0" if get_setting("bot_active") == "1" else "1"
+                set_setting("bot_active", new_state)
+            else:
+                new_state = "0" if get_setting("fsub_active", "1") == "1" else "1"
+                set_setting("fsub_active", new_state)
+            
+            is_on = get_setting("bot_active") == "1"
+            fsub_on = get_setting("fsub_active", "1") == "1"
+            
+            await q.edit_message_text(
+                f"👑 <b>{b('ADMIN PANEL')}</b>\n\n"
+                f"Bot Status: {'🟢 ON' if is_on else '🔴 OFF'}\n"
+                f"Force Join: {'🟢 ON' if fsub_on else '🔴 OFF'}",
+                parse_mode=ParseMode.HTML,
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"Toggle Bot ({'OFF' if new_state=='1' else 'ON'})", callback_data="admin_toggle", style="danger" if new_state=="1" else "success")],
+                    [InlineKeyboardButton(f"Toggle Bot ({'OFF' if is_on else 'ON'})", callback_data="admin_toggle", style="danger" if is_on else "success")],
+                    [InlineKeyboardButton(f"Toggle Force Join ({'OFF' if fsub_on else 'ON'})", callback_data="admin_fsub_toggle", style="danger" if fsub_on else "success")],
                     [InlineKeyboardButton("📢 " + b("Broadcast"), callback_data="admin_broadcast", style="primary")]
                 ])
             )
@@ -321,7 +340,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if get_setting("bot_active") == "0" and uid != ADMIN_ID: return
 
-    if uid != ADMIN_ID:
+    # 🔥 FIX: Check Force Join Setting
+    if uid != ADMIN_ID and get_setting("fsub_active", "1") == "1":
         joined = await check_join(context.bot, uid)
         if not joined:
             await msg.reply_text(f"🔒 {b('Join channel first!')}", reply_markup=force_join_kb(), parse_mode=ParseMode.HTML)
@@ -374,7 +394,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for i in range(0, len(blocks), batch_size):
             batch = blocks[i:i+batch_size]
             
-            # check_account ko properly background thread mein bheja bina bot roke
             tasks = [asyncio.to_thread(check_account, blk) for blk in batch]
             results = await asyncio.gather(*tasks)
             
@@ -429,7 +448,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status.edit_text(f"✅ {b('Sent')}: {sent} | ❌ {b('Failed')}: {failed}", parse_mode=ParseMode.HTML)
         return
 
-    if uid != ADMIN_ID:
+    # 🔥 FIX: Check Force Join Setting
+    if uid != ADMIN_ID and get_setting("fsub_active", "1") == "1":
         joined = await check_join(context.bot, uid)
         if not joined:
             await msg.reply_text(f"🔒 {b('Join channel first!')}", reply_markup=force_join_kb(), parse_mode=ParseMode.HTML)
