@@ -1,12 +1,12 @@
 # ============================================================
-#  🎬 Netflix Checker (No Crash - Stable)
+#  🎬 Netflix Checker (Final Fixed - Railway Ready)
 #  Bot: @Leon_netflixbot | Admin: 8626080388
 # ============================================================
 
 import re, html, json, requests, asyncio, logging, urllib.parse, sqlite3, time, zipfile, io
 from concurrent.futures import ThreadPoolExecutor
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ParseMode
+from telegram.constants import ParseMode, ChatType
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 # ================== CONFIG ==================
@@ -190,13 +190,12 @@ def check_account(cookie_text):
 
 # ================== FORCE JOIN & FORMATTER ==================
 async def check_join(bot, uid):
-    if get_setting("channel_verify", "0") == "0": return True
-    if uid == ADMIN_ID: return True
     try:
         m = await bot.get_chat_member(CHANNEL_USERNAME, uid)
         if m.status not in ("member", "administrator", "creator"):
             return False
-    except: return False
+    except:
+        return False
     return True
 
 def force_join_kb():
@@ -238,14 +237,15 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔴 Bot is currently OFF by Admin.")
         return
 
-    joined = await check_join(context.bot, uid)
-    if not joined:
-        await update.message.reply_text(
-            f"🔒 <b>{b('JOIN REQUIRED')}</b>\n\n"
-            f"{b('Please join our channel to use this bot')}.",
-            parse_mode=ParseMode.HTML, reply_markup=force_join_kb()
-        )
-        return
+    if uid != ADMIN_ID:
+        joined = await check_join(context.bot, uid)
+        if not joined:
+            await update.message.reply_text(
+                f"🔒 <b>{b('JOIN REQUIRED')}</b>\n\n"
+                f"{b('Please join our channel to use this bot')}.",
+                parse_mode=ParseMode.HTML, reply_markup=force_join_kb()
+            )
+            return
 
     await update.message.reply_text(
         f"🎬 <b>{b('NETFLIX PURE CHECKER')}</b>\n\n"
@@ -258,21 +258,14 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Access Denied.")
-        return
-        
-    is_on = get_setting("bot_active") == "1"
-    is_verify = get_setting("channel_verify") == "1"
+    if update.effective_user.id != ADMIN_ID: return
     
+    is_on = get_setting("bot_active") == "1"
     await update.message.reply_text(
-        f"👑 <b>{b('ADMIN PANEL')}</b>\n\n"
-        f"Bot Status: {'🟢 ON' if is_on else '🔴 OFF'}\n"
-        f"Channel Verify: {'🟢 ON' if is_verify else '🔴 OFF'}",
+        f"👑 <b>{b('ADMIN PANEL')}</b>\n\nBot Status: {'🟢 ON' if is_on else '🔴 OFF'}",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"Bot: {'OFF' if is_on else 'ON'}", callback_data="admin_toggle", style="danger" if is_on else "success")],
-            [InlineKeyboardButton(f"Channel Verify: {'OFF' if is_verify else 'ON'}", callback_data="admin_verify_toggle", style="danger" if is_verify else "success")],
+            [InlineKeyboardButton(f"Toggle Bot ({'OFF' if is_on else 'ON'})", callback_data="admin_toggle", style="danger" if is_on else "success")],
             [InlineKeyboardButton("📢 " + b("Broadcast"), callback_data="admin_broadcast", style="primary")]
         ])
     )
@@ -294,7 +287,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ])
             )
         else:
-            await q.answer("You haven't joined yet!", show_alert=True)
+            await q.answer("You haven't joined yet! Please join first.", show_alert=True)
             
     elif d == "how_to":
         await q.edit_message_text(
@@ -311,29 +304,12 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if d == "admin_toggle":
             new_state = "0" if get_setting("bot_active") == "1" else "1"
             set_setting("bot_active", new_state)
-            is_on = new_state == "1"
-            is_verify = get_setting("channel_verify") == "1"
             await q.edit_message_reply_markup(
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"Bot: {'OFF' if is_on else 'ON'}", callback_data="admin_toggle", style="danger" if is_on else "success")],
-                    [InlineKeyboardButton(f"Channel Verify: {'OFF' if is_verify else 'ON'}", callback_data="admin_verify_toggle", style="danger" if is_verify else "success")],
+                    [InlineKeyboardButton(f"Toggle Bot ({'OFF' if new_state=='1' else 'ON'})", callback_data="admin_toggle", style="danger" if new_state=="1" else "success")],
                     [InlineKeyboardButton("📢 " + b("Broadcast"), callback_data="admin_broadcast", style="primary")]
                 ])
             )
-            
-        elif d == "admin_verify_toggle":
-            new_state = "0" if get_setting("channel_verify") == "1" else "1"
-            set_setting("channel_verify", new_state)
-            is_on = get_setting("bot_active") == "1"
-            is_verify = new_state == "1"
-            await q.edit_message_reply_markup(
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"Bot: {'OFF' if is_on else 'ON'}", callback_data="admin_toggle", style="danger" if is_on else "success")],
-                    [InlineKeyboardButton(f"Channel Verify: {'OFF' if is_verify else 'ON'}", callback_data="admin_verify_toggle", style="danger" if is_verify else "success")],
-                    [InlineKeyboardButton("📢 " + b("Broadcast"), callback_data="admin_broadcast", style="primary")]
-                ])
-            )
-            
         elif d == "admin_broadcast":
             context.user_data["awaiting_broadcast"] = True
             await q.edit_message_text(f"📢 {b('Send the message you want to broadcast:')}", parse_mode=ParseMode.HTML)
@@ -345,10 +321,11 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if get_setting("bot_active") == "0" and uid != ADMIN_ID: return
 
-    joined = await check_join(context.bot, uid)
-    if not joined:
-        await msg.reply_text(f"🔒 {b('Join channel first!')}", reply_markup=force_join_kb(), parse_mode=ParseMode.HTML)
-        return
+    if uid != ADMIN_ID:
+        joined = await check_join(context.bot, uid)
+        if not joined:
+            await msg.reply_text(f"🔒 {b('Join channel first!')}", reply_markup=force_join_kb(), parse_mode=ParseMode.HTML)
+            return
 
     if not msg.document: return
     
@@ -391,14 +368,17 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         valid_count = 0
         completed = 0
         
-        def check_wrapper(cookie_block):
-            return cookie_block, check_account(cookie_block)
+        # 🔥 FIX: Asynchronous Batch Processing lagaya hai (No blocking!)
+        batch_size = 10 
         
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(check_wrapper, blk) for blk in blocks]
+        for i in range(0, len(blocks), batch_size):
+            batch = blocks[i:i+batch_size]
             
-            for future in futures:
-                cookie_block, acc = future.result()
+            # check_account ko properly background thread mein bheja bina bot roke
+            tasks = [asyncio.to_thread(check_account, blk) for blk in batch]
+            results = await asyncio.gather(*tasks)
+            
+            for acc in results:
                 completed += 1
                 
                 if acc:
@@ -408,10 +388,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         caption, kb = res
                         await msg.reply_text(caption, parse_mode=ParseMode.HTML, reply_markup=kb)
                 
-                if completed % 5 == 0 or completed == total:
-                    try: await status.edit_text(f"⚡ {b('Checked')} {completed}/{total} | {b('Valid:')} {valid_count}", parse_mode=ParseMode.HTML)
-                    except: pass
-                    await asyncio.sleep(0.5) 
+            if completed % 5 == 0 or completed == total:
+                try: 
+                    await status.edit_text(f"⚡ {b('Checked')} {completed}/{total} | {b('Valid:')} {valid_count}", parse_mode=ParseMode.HTML)
+                except: 
+                    pass
+                await asyncio.sleep(0.5) 
                 
         await status.edit_text(f"✅ {b('Bulk Check Complete')}\n\n{b('Total Checked:')} {total}\n{b('Valid Accounts:')} {valid_count}", parse_mode=ParseMode.HTML)
         
@@ -428,6 +410,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if uid == ADMIN_ID and context.user_data.get("awaiting_broadcast"):
         context.user_data["awaiting_broadcast"] = False
+        text = msg.text.strip()
         status = await msg.reply_text(f"📢 {b('Broadcasting...')}", parse_mode=ParseMode.HTML)
         
         conn = get_db(); c = conn.cursor()
@@ -446,10 +429,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status.edit_text(f"✅ {b('Sent')}: {sent} | ❌ {b('Failed')}: {failed}", parse_mode=ParseMode.HTML)
         return
 
-    joined = await check_join(context.bot, uid)
-    if not joined:
-        await msg.reply_text(f"🔒 {b('Join channel first!')}", reply_markup=force_join_kb(), parse_mode=ParseMode.HTML)
-        return
+    if uid != ADMIN_ID:
+        joined = await check_join(context.bot, uid)
+        if not joined:
+            await msg.reply_text(f"🔒 {b('Join channel first!')}", reply_markup=force_join_kb(), parse_mode=ParseMode.HTML)
+            return
     
     text = msg.text.strip()
     if text.startswith("/") or len(text) < 20: return
@@ -467,17 +451,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
-    
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("admin", admin_cmd))
-    
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     print("👑 Bot Started")
-    
-    # 🔥 Yahan koi concurrent_updates nahi hai
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
