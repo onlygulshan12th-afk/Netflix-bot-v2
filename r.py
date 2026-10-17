@@ -1,9 +1,9 @@
 # ============================================================
-#  🎬 Netflix Checker (Fast Bulk + Force Join + Owner)
+#  🎬 Netflix Checker (Final Fixed - Railway Ready)
 #  Bot: @Leon_netflixbot | Admin: 8626080388
 # ============================================================
 
-import re, html, json, requests, asyncio, logging, urllib.parse, time, zipfile, io
+import re, html, json, requests, asyncio, logging, urllib.parse, sqlite3, time, zipfile, io
 from concurrent.futures import ThreadPoolExecutor
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode, ChatType
@@ -16,10 +16,11 @@ OWNER_USERNAME = "@I339b"
 CHANNEL_USERNAME = "@sterniterspro"
 CHANNEL_LINK = "https://t.me/sterniterspro"
 API_URL = "https://netflixapi.bmera5952.workers.dev/"
+DB_FILE = "checker.db"
 
 logging.basicConfig(format="%(asctime)s | %(message)s", level=logging.INFO)
 
-# ================== FONTS ==================
+# ================== FONTS & DB ==================
 def b(text):
     out = []
     for c in str(text):
@@ -40,6 +41,36 @@ def clean_text(s):
     s = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), s)
     s = re.sub(r'\\u([0-9a-fA-F]{4})', lambda m: chr(int(m.group(1), 16)), s)
     return s.strip()
+
+def get_db():
+    conn = sqlite3.connect(DB_FILE, timeout=30)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def db_init():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)""")
+    conn.commit(); conn.close()
+
+db_init()
+
+def get_setting(key, default="1"):
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT value FROM settings WHERE key=?", (key,))
+    r = c.fetchone(); conn.close()
+    return r[0] if r else default
+
+def set_setting(key, val):
+    conn = get_db(); c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(val)))
+    conn.commit(); conn.close()
+
+def add_user(uid):
+    conn = get_db(); c = conn.cursor()
+    c.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (uid,))
+    conn.commit(); conn.close()
 
 # ================== NETFLIX LOGIC ==================
 UA_WEB = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -170,7 +201,7 @@ async def check_join(bot, uid):
 def force_join_kb():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📢 " + b("Join Channel"), url=CHANNEL_LINK, style="primary")],
-        [InlineKeyboardButton("✅ " + b("I Joined"), callback_data="check_join", style="success")]
+        [InlineKeyboardButton("✅ " + b("I Joined"), callback_data="check_join_btn", style="success")]
     ])
 
 def format_result(acc):
@@ -200,6 +231,11 @@ def format_result(acc):
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     uid = user.id
+    add_user(uid)
+
+    if get_setting("bot_active") == "0" and uid != ADMIN_ID:
+        await update.message.reply_text("🔴 Bot is currently OFF by Admin.")
+        return
 
     if uid != ADMIN_ID:
         joined = await check_join(context.bot, uid)
@@ -221,10 +257,25 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
     )
 
+async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    
+    is_on = get_setting("bot_active") == "1"
+    await update.message.reply_text(
+        f"👑 <b>{b('ADMIN PANEL')}</b>\n\nBot Status: {'🟢 ON' if is_on else '🔴 OFF'}",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"Toggle Bot ({'OFF' if is_on else 'ON'})", callback_data="admin_toggle", style="danger" if is_on else "success")],
+            [InlineKeyboardButton("📢 " + b("Broadcast"), callback_data="admin_broadcast", style="primary")]
+        ])
+    )
+
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
+    d = q.data
     
-    if q.data == "check_join":
+    # 🔥 FIX: I Joined Button
+    if d == "check_join_btn":
         joined = await check_join(context.bot, q.from_user.id)
         if joined:
             await q.edit_message_text(
@@ -237,20 +288,39 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ])
             )
         else:
-            await q.answer("You haven't joined yet!", show_alert=True)
+            await q.answer("You haven't joined yet! Please join first.", show_alert=True)
             
-    elif q.data == "how_to":
+    elif d == "how_to":
         await q.edit_message_text(
             f"📖 <b>{b('HOW TO USE')}</b>\n\n"
             f"1. <b>Single:</b> Just paste a Netflix cookie here.\n"
-            f"2. <b>Bulk:</b> Send a `.txt` or `.zip` file. (Cookies separated by empty lines).\n\n"
+            f"2. <b>Bulk:</b> Send a `.txt` or `.zip` file. (Max 300 cookies).\n\n"
             f"Bot will check and send links for each valid cookie fast.",
             parse_mode=ParseMode.HTML
         )
+        
+    elif d.startswith("admin_"):
+        if q.from_user.id != ADMIN_ID: return
+        
+        if d == "admin_toggle":
+            new_state = "0" if get_setting("bot_active") == "1" else "1"
+            set_setting("bot_active", new_state)
+            await q.edit_message_reply_markup(
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(f"Toggle Bot ({'OFF' if new_state=='1' else 'ON'})", callback_data="admin_toggle", style="danger" if new_state=="1" else "success")],
+                    [InlineKeyboardButton("📢 " + b("Broadcast"), callback_data="admin_broadcast", style="primary")]
+                ])
+            )
+        elif d == "admin_broadcast":
+            context.user_data["awaiting_broadcast"] = True
+            await q.edit_message_text(f"📢 {b('Send the message you want to broadcast:')}", parse_mode=ParseMode.HTML)
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     uid = msg.from_user.id
+    add_user(uid)
+
+    if get_setting("bot_active") == "0" and uid != ADMIN_ID: return
 
     if uid != ADMIN_ID:
         joined = await check_join(context.bot, uid)
@@ -281,12 +351,21 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         blocks.extend(re.split(r'\n\s*\n', z.read(f).decode("utf-8", errors="ignore")))
         
         blocks = [blk.strip() for blk in blocks if blk.strip()]
+        
+        # 🔥 LIMIT LOGIC
+        total_found = len(blocks)
+        if total_found > 300:
+            blocks = blocks[:300]
+            limit_msg = f" (Limit 300 applied from {total_found})"
+        else:
+            limit_msg = ""
+            
         total = len(blocks)
         if total == 0:
             await status.edit_text("❌ No valid cookies found in file.")
             return
             
-        await status.edit_text(f"⚡ {b('Fast Checking')} {total} {b('cookies...')}", parse_mode=ParseMode.HTML)
+        await status.edit_text(f"⚡ {b('Fast Checking')} {total} {b('cookies')}{limit_msg}...", parse_mode=ParseMode.HTML)
         
         valid_count = 0
         completed = 0
@@ -321,8 +400,32 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text: return
-    
     uid = msg.from_user.id
+    add_user(uid)
+
+    if get_setting("bot_active") == "0" and uid != ADMIN_ID: return
+
+    # 🔥 BROADCAST LOGIC (No "Broadcast" text)
+    if uid == ADMIN_ID and context.user_data.get("awaiting_broadcast"):
+        context.user_data["awaiting_broadcast"] = False
+        status = await msg.reply_text(f"📢 {b('Broadcasting...')}", parse_mode=ParseMode.HTML)
+        
+        conn = get_db(); c = conn.cursor()
+        c.execute("SELECT user_id FROM users")
+        users = [r["user_id"] for r in c.fetchall()]
+        conn.close()
+        
+        sent, failed = 0, 0
+        for target_id in users:
+            try:
+                # Direct message, no "Broadcast" text
+                await context.bot.send_message(target_id, text, parse_mode=ParseMode.HTML)
+                sent += 1
+            except: failed += 1
+            await asyncio.sleep(0.05)
+            
+        await status.edit_text(f"✅ {b('Sent')}: {sent} | ❌ {b('Failed')}: {failed}", parse_mode=ParseMode.HTML)
+        return
 
     if uid != ADMIN_ID:
         joined = await check_join(context.bot, uid)
@@ -347,6 +450,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start_cmd))
+    app.add_handler(CommandHandler("admin", admin_cmd))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
