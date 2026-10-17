@@ -1,5 +1,5 @@
 # ============================================================
-#  🎬 Netflix Checker (Final Stable Multi-User)
+#  🎬 Netflix Checker (No Crash - Stable)
 #  Bot: @Leon_netflixbot | Admin: 8626080388
 # ============================================================
 
@@ -477,11 +477,8 @@ def main():
     
     print("👑 Bot Started")
     
-    # 🔥 ISME KOI CONCURRENT_UPDATES NAHI HAI, ISLIYE 100% CHALEGA
-    app.run_polling(
-        allowed_updates=Update.ALL_TYPES, 
-        drop_pending_updates=True
-    )
+    # 🔥 Yahan koi concurrent_updates nahi hai
+    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
