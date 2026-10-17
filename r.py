@@ -1,5 +1,5 @@
 # ============================================================
-#  🎬 Netflix Checker (Railway Fixed)
+#  🎬 Netflix Checker (Final Stable + Multi-Device Support)
 #  Bot: @Leon_netflixbot | Admin: 8626080388
 # ============================================================
 
@@ -476,6 +476,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     print("👑 Bot Started")
+    # Yahan koi concurrent_updates nahi hai, ye purane version pe bhi chalega
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
